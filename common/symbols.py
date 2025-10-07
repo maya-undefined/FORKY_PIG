@@ -1,0 +1,2 @@
+
+HC_HOME = ".hypercomputer"

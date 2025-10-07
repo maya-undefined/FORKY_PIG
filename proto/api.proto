@@ -1,0 +1,84 @@
+syntax = "proto3";
+package devbox;
+option go_package = "github.com/yourorg/devbox/proto;proto";
+
+message Empty {}
+
+message Shape { int32 vcpu = 1; int32 ram_gb = 2; string gpu_model = 3; }
+message SnapshotRef { string id = 1; }
+
+message VMHandle { string vm_id = 1; string host = 2; string ip = 3; string ssh_key_ref = 4; }
+
+// --- Pool messages ---
+message PoolId { string pool_id = 1; }
+message PoolSpec { string name = 1; string tenant_id = 2; }
+message Pool { string id = 1; string name = 2; string tenant_id = 3; repeated string hosts = 4; }
+message ListPoolsHostsReq { string pool_id = 1; }
+message ListPoolsHostsResp { repeated string hosts = 1; }
+
+message ListPoolsResp { repeated Pool pools = 1; }
+message CreatePoolReq { PoolSpec spec = 1; }
+message CreatePoolResp { Pool pool = 1; }
+message AddHostReq { string pool_id = 1; string host_addr = 2; } // e.g. "127.0.0.1:50052"
+message RemoveHostReq { string pool_id = 1; string host = 2; } // host name as returned by ReportInventory.host
+
+message EnsureWarmPoolReq { Shape shape = 1; int32 target = 2; SnapshotRef snapshot = 3; string pool_id = 4;}
+message EnsureWarmPoolResp { int32 current = 1; }
+
+message AcquireReq { Shape shape = 1; }
+message AcquireResp { VMHandle vm = 1; }
+
+message ReleaseReq { string vm_id = 1; bool recycle = 2; }
+
+message ExecReq { string vm_id = 1; repeated string argv = 2; int32 timeout_sec = 3; }
+message ExecResp { int32 exit_code = 1; bytes stdout = 2; bytes stderr = 3; }
+
+message HealthResp { string status = 1; }
+
+message InventoryResp { string host = 1; int32 cpus = 2; int64 mem_bytes = 3; repeated string gpus_bdf = 4; repeated int32 gpus_numa = 5; }
+message HostSpawnWarmReq { Shape shape = 1; map<string, string> snapshot = 2; string gpu_bdf = 3; }
+message HostSpawnWarmResp { string vm_id = 1; }
+message HostAcquireWarmReq { Shape shape = 1; }
+message HostAcquireWarmResp { string vm_id = 1; }
+message HostFastRestoreReq { Shape shape = 1; map<string, string> overlay = 2; string gpu_bdf = 3; }
+message HostFastRestoreResp { string vm_id = 1; }
+message VMId { string vm_id = 1; }
+message HostExecReq { string vm_id = 1; repeated string argv = 2; int32 timeout_sec = 3; }
+message GpuBDF { string bdf = 1; }
+
+message ForkReq { string vm_id = 1; uint32 how_many = 2; bool pinned = 3; bool cold_fork = 4; }
+message ForkResp { repeated string vm_ids = 1;}
+message OverlayReq { string vm_id = 1; }
+message OverlayResp { map<string, string> overlays = 1; }
+
+service ControllerAPI {
+  rpc CreatePool(CreatePoolReq) returns (CreatePoolResp);
+  rpc ListPools(Empty) returns (ListPoolsResp);
+  rpc ListPoolHosts(ListPoolsHostsReq) returns (ListPoolsHostsResp);
+  rpc EnsureWarmPool(EnsureWarmPoolReq) returns (EnsureWarmPoolResp);
+  rpc Acquire(AcquireReq) returns (AcquireResp);
+  rpc Release(ReleaseReq) returns (Empty);
+  rpc Exec(ExecReq) returns (ExecResp);
+  rpc Health(Empty) returns (HealthResp);
+  rpc Fork(ForkReq) returns (ForkResp);
+}
+
+service HostdAPI {
+  rpc ReportInventory(Empty) returns (InventoryResp);
+  rpc BindGpuToVfio(GpuBDF) returns (Empty);
+  rpc GpuReset(GpuBDF) returns (Empty);
+  rpc SpawnWarm(HostSpawnWarmReq) returns (HostSpawnWarmResp);
+  rpc AcquireWarm(HostAcquireWarmReq) returns (HostAcquireWarmResp);
+  rpc FastRestore(HostFastRestoreReq) returns (HostFastRestoreResp);
+  rpc Unpause(VMId) returns (Empty);
+  rpc Pause(VMId) returns (Empty);
+  rpc Destroy(VMId) returns (Empty);
+  rpc Exec(HostExecReq) returns (ExecResp);
+  rpc GetOverlays(OverlayReq) returns (OverlayResp);
+}
+
+service AgentAPI {
+  rpc SelfTestGpu(Empty) returns (HealthResp);
+  rpc Exec(HostExecReq) returns (ExecResp);
+  rpc TeardownCleanup(Empty) returns (Empty);
+}
